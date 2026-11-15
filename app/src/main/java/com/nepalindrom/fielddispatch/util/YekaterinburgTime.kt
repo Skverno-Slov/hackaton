@@ -26,6 +26,32 @@ object YekaterinburgTime {
         return ZonedDateTime.now(ZONE_ID).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
     }
 
+    fun parseOffsetDateTime(isoString: String?): OffsetDateTime? {
+        if (isoString.isNullOrBlank()) return null
+        return try {
+            OffsetDateTime.parse(isoString)
+        } catch (_: Exception) {
+            try {
+                ZonedDateTime.parse(isoString).toOffsetDateTime()
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    fun formatIso(odt: OffsetDateTime): String {
+        return odt.withOffsetSameInstant(ZONE_OFFSET).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+    }
+
+    fun parseDateStartOfDay(dateStr: String): OffsetDateTime {
+        return try {
+            val ld = LocalDate.parse(dateStr)
+            ld.atTime(LocalTime.of(8, 30)).atOffset(ZONE_OFFSET)
+        } catch (_: Exception) {
+            LocalDate.now(ZONE_ID).atTime(LocalTime.of(8, 30)).atOffset(ZONE_OFFSET)
+        }
+    }
+
     fun formatTime(isoString: String?): String {
         if (isoString.isNullOrEmpty()) return "--:--"
         val s = isoString!!

@@ -396,41 +396,146 @@ class EngineerViewModel(
         }
     }
 
-    fun postVisitDelayed(date: String, orderId: String, expectedEndIso: String) {
+    fun postVisitDelayed(date: String, orderId: String, additionalMinutes: Int) {
         val staffId = _selectedStaffId.value
+        val currentPlan = (_planState.value as? ApiResult.Success)?.data
+        val engineerRoute = currentPlan?.routes?.firstOrNull { it.staff_id == staffId }
+        val stop = engineerRoute?.stops?.firstOrNull { it.order_id == orderId }
+
+        val planAsOf = currentPlan?.as_of?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+            ?: YekaterinburgTime.parseDateStartOfDay(date)
+
+        val stopStart = stop?.start?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+        val stopEnd = stop?.end?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+
+        // Event timestamp must be >= plan.as_of and > stop.start (so visit is in active prefix)
+        val candidateTimestamp = if (stopStart != null) {
+            val afterStart = stopStart.plusMinutes(1)
+            if (afterStart.isAfter(planAsOf)) afterStart else planAsOf
+        } else {
+            planAsOf
+        }
+
+        val baseEnd = stopEnd ?: candidateTimestamp
+        val expectedEnd = if (baseEnd.isAfter(candidateTimestamp)) {
+            baseEnd.plusMinutes(additionalMinutes.toLong())
+        } else {
+            candidateTimestamp.plusMinutes(additionalMinutes.toLong())
+        }
+
         val event = VisitDelayedEvent(
             event_id = "EVT-${System.currentTimeMillis()}",
-            timestamp = YekaterinburgTime.nowIsoString(),
+            timestamp = YekaterinburgTime.formatIso(candidateTimestamp),
             staff_id = staffId,
             order_id = orderId,
-            expected_end = expectedEndIso
+            expected_end = YekaterinburgTime.formatIso(expectedEnd)
         )
         sendEvent(date, event)
     }
 
-    fun postOrderTransferred(date: String, orderId: String, actualEndIso: String, transferredTo: TransferredTo) {
+    fun postVisitDelayed(date: String, orderId: String, expectedEndIso: String) {
+        val currentPlan = (_planState.value as? ApiResult.Success)?.data
+        val planAsOf = currentPlan?.as_of?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+            ?: YekaterinburgTime.parseDateStartOfDay(date)
+        val engineerRoute = currentPlan?.routes?.firstOrNull { it.staff_id == _selectedStaffId.value }
+        val stop = engineerRoute?.stops?.firstOrNull { it.order_id == orderId }
+        val stopStart = stop?.start?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+
+        val candidateTimestamp = if (stopStart != null) {
+            val afterStart = stopStart.plusMinutes(1)
+            if (afterStart.isAfter(planAsOf)) afterStart else planAsOf
+        } else {
+            planAsOf
+        }
+
+        val parsedExpectedEnd = YekaterinburgTime.parseOffsetDateTime(expectedEndIso)
+        val validExpectedEnd = if (parsedExpectedEnd != null && parsedExpectedEnd.isAfter(candidateTimestamp)) {
+            parsedExpectedEnd
+        } else {
+            candidateTimestamp.plusMinutes(30)
+        }
+
+        val event = VisitDelayedEvent(
+            event_id = "EVT-${System.currentTimeMillis()}",
+            timestamp = YekaterinburgTime.formatIso(candidateTimestamp),
+            staff_id = _selectedStaffId.value,
+            order_id = orderId,
+            expected_end = YekaterinburgTime.formatIso(validExpectedEnd)
+        )
+        sendEvent(date, event)
+    }
+
+    fun postOrderTransferred(date: String, orderId: String, transferredTo: TransferredTo) {
         val staffId = _selectedStaffId.value
+        val currentPlan = (_planState.value as? ApiResult.Success)?.data
+        val engineerRoute = currentPlan?.routes?.firstOrNull { it.staff_id == staffId }
+        val stop = engineerRoute?.stops?.firstOrNull { it.order_id == orderId }
+
+        val planAsOf = currentPlan?.as_of?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+            ?: YekaterinburgTime.parseDateStartOfDay(date)
+
+        val stopStart = stop?.start?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+
+        val candidateTimestamp = if (stopStart != null) {
+            val afterStart = stopStart.plusMinutes(1)
+            if (afterStart.isAfter(planAsOf)) afterStart else planAsOf
+        } else {
+            planAsOf
+        }
+
+        val timestampStr = YekaterinburgTime.formatIso(candidateTimestamp)
+
         val event = OrderTransferredEvent(
             event_id = "EVT-${System.currentTimeMillis()}",
-            timestamp = YekaterinburgTime.nowIsoString(),
+            timestamp = timestampStr,
             staff_id = staffId,
             order_id = orderId,
-            actual_end = actualEndIso,
+            actual_end = timestampStr,
             transferred_to = transferredTo
         )
         sendEvent(date, event)
     }
 
-    fun postStaffUnavailable(date: String, reason: UnavailableReason, untilIso: String?) {
+    fun postOrderTransferred(date: String, orderId: String, actualEndIso: String, transferredTo: TransferredTo) {
+        postOrderTransferred(date, orderId, transferredTo)
+    }
+
+    fun postStaffUnavailable(date: String, reason: UnavailableReason, hoursUntil: Long?) {
         val staffId = _selectedStaffId.value
+        val currentPlan = (_planState.value as? ApiResult.Success)?.data
+
+        val planAsOf = currentPlan?.as_of?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+            ?: YekaterinburgTime.parseDateStartOfDay(date)
+
+        val timestampStr = YekaterinburgTime.formatIso(planAsOf)
+
+        val untilStr = if (hoursUntil != null && hoursUntil > 0) {
+            YekaterinburgTime.formatIso(planAsOf.plusHours(hoursUntil))
+        } else null
+
         val event = StaffUnavailableEvent(
             event_id = "EVT-${System.currentTimeMillis()}",
-            timestamp = YekaterinburgTime.nowIsoString(),
+            timestamp = timestampStr,
             staff_id = staffId,
-            until = untilIso,
+            until = untilStr,
             reason = reason
         )
         sendEvent(date, event)
+    }
+
+    fun postStaffUnavailable(date: String, reason: UnavailableReason, untilIso: String?) {
+        if (untilIso.isNullOrBlank()) {
+            postStaffUnavailable(date, reason, null as Long?)
+        } else {
+            val parsedUntil = YekaterinburgTime.parseOffsetDateTime(untilIso)
+            val currentPlan = (_planState.value as? ApiResult.Success)?.data
+            val planAsOf = currentPlan?.as_of?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+                ?: YekaterinburgTime.parseDateStartOfDay(date)
+            val hrs = if (parsedUntil != null) {
+                java.time.Duration.between(planAsOf, parsedUntil).toHours().coerceAtLeast(1)
+            } else 2L
+            postStaffUnavailable(date, reason, hrs)
+        }
     }
 
     private fun sendEvent(date: String, event: Event) {

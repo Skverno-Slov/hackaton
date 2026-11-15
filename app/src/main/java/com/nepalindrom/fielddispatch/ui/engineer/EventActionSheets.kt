@@ -96,14 +96,15 @@ fun VisitDelayedDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 val addMin = endMinutesAdd.toIntOrNull() ?: 30
                 val calculatedEnd = try {
-                    val base = selectedStop?.end?.let { ZonedDateTime.parse(it) } ?: ZonedDateTime.now(YekaterinburgTime.ZONE_ID)
-                    base.plusMinutes(addMin.toLong()).format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                    val base = selectedStop?.end?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+                        ?: selectedStop?.start?.let { YekaterinburgTime.parseOffsetDateTime(it)?.plusMinutes(45) }
+                    base?.plusMinutes(addMin.toLong())?.let { YekaterinburgTime.formatTime(YekaterinburgTime.formatIso(it)) } ?: "--:--"
                 } catch (_: Exception) {
-                    YekaterinburgTime.nowIsoString()
+                    "--:--"
                 }
 
                 Text(
-                    text = "Ожидаемое завершение: ${YekaterinburgTime.formatTime(calculatedEnd)} (UTC+5)",
+                    text = "Ожидаемое завершение: $calculatedEnd (UTC+5)",
                     fontSize = 12.sp,
                     color = RostelecomPurple
                 )
@@ -114,12 +115,11 @@ fun VisitDelayedDialog(
                 onClick = {
                     val orderId = selectedStop?.order_id ?: return@Button
                     val addMin = endMinutesAdd.toIntOrNull() ?: 30
-                    val base = try {
-                        selectedStop?.end?.let { ZonedDateTime.parse(it) } ?: ZonedDateTime.now(YekaterinburgTime.ZONE_ID)
-                    } catch (_: Exception) {
-                        ZonedDateTime.now(YekaterinburgTime.ZONE_ID)
-                    }
-                    val isoEnd = base.plusMinutes(addMin.toLong()).format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                    val base = selectedStop?.end?.let { YekaterinburgTime.parseOffsetDateTime(it) }
+                        ?: selectedStop?.start?.let { YekaterinburgTime.parseOffsetDateTime(it)?.plusMinutes(45) }
+                    val isoEnd = if (base != null) {
+                        YekaterinburgTime.formatIso(base.plusMinutes(addMin.toLong()))
+                    } else ""
                     onSubmit(orderId, isoEnd)
                 },
                 enabled = selectedStop != null
@@ -203,7 +203,7 @@ fun OrderTransferredDialog(
             Button(
                 onClick = {
                     val orderId = selectedStop?.order_id ?: return@Button
-                    val actualEndIso = YekaterinburgTime.nowIsoString()
+                    val actualEndIso = selectedStop?.start ?: ""
                     onSubmit(orderId, actualEndIso, selectedTarget)
                 },
                 enabled = selectedStop != null
@@ -280,10 +280,7 @@ fun StaffUnavailableDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = StatusDangerRed),
                 onClick = {
                     val untilIso = if (hasUntil) {
-                        val hrs = hoursUntil.toLongOrNull() ?: 2L
-                        ZonedDateTime.now(YekaterinburgTime.ZONE_ID)
-                            .plusHours(hrs)
-                            .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                        hoursUntil.ifBlank { "2" }
                     } else null
                     onSubmit(reason, untilIso)
                 }
