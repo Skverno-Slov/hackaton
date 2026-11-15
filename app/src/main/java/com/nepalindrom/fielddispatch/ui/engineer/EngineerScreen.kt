@@ -404,8 +404,13 @@ private fun EngineerRouteContent(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            val activeVisit = targetStop?.takeIf { it.type == StopType.VISIT }
+                ?: route.stops.firstOrNull { it.type == StopType.VISIT && it.status != StopStatus.DONE }
+                ?: route.stops.firstOrNull { it.type == StopType.VISIT }
+                ?: route.stops.first()
+
             OutlinedButton(
-                onClick = { onDelayedClick(route.stops.firstOrNull { it.type == StopType.VISIT } ?: route.stops.first()) },
+                onClick = { onDelayedClick(activeVisit) },
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                 modifier = Modifier.weight(1f)
             ) {
@@ -414,7 +419,7 @@ private fun EngineerRouteContent(
                 Text("Задержка", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
             OutlinedButton(
-                onClick = { onTransferredClick(route.stops.firstOrNull { it.type == StopType.VISIT } ?: route.stops.first()) },
+                onClick = { onTransferredClick(activeVisit) },
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                 modifier = Modifier.weight(1f)
             ) {

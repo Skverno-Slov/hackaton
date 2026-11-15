@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nepalindrom.fielddispatch.data.model.Stop
+import com.nepalindrom.fielddispatch.data.model.StopStatus
 import com.nepalindrom.fielddispatch.data.model.StopType
 import com.nepalindrom.fielddispatch.data.model.TransferredTo
 import com.nepalindrom.fielddispatch.data.model.UnavailableReason
@@ -46,7 +47,8 @@ fun VisitDelayedDialog(
     onDismiss: () -> Unit,
     onSubmit: (orderId: String, expectedEndIso: String) -> Unit
 ) {
-    val visitStops = stops.filter { it.type == StopType.VISIT && it.order_id != null }
+    val visitStops = stops.filter { it.type == StopType.VISIT && it.order_id != null && it.status != StopStatus.DONE }
+        .ifEmpty { stops.filter { it.type == StopType.VISIT && it.order_id != null } }
     var selectedStop by remember { mutableStateOf(initialOrder ?: visitStops.firstOrNull()) }
     var expanded by remember { mutableStateOf(false) }
 
@@ -143,7 +145,8 @@ fun OrderTransferredDialog(
     onDismiss: () -> Unit,
     onSubmit: (orderId: String, actualEndIso: String, transferredTo: TransferredTo) -> Unit
 ) {
-    val visitStops = stops.filter { it.type == StopType.VISIT && it.order_id != null }
+    val visitStops = stops.filter { it.type == StopType.VISIT && it.order_id != null && it.status != StopStatus.DONE }
+        .ifEmpty { stops.filter { it.type == StopType.VISIT && it.order_id != null } }
     var selectedStop by remember { mutableStateOf(initialOrder ?: visitStops.firstOrNull()) }
     var expanded by remember { mutableStateOf(false) }
 
